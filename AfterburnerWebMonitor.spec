@@ -10,9 +10,18 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # Web 层已改用标准库 http.server，彻底排除 Flask 全家桶
+        'flask', 'werkzeug', 'jinja2', 'markupsafe', 'itsdangerous',
+        'click', 'blinker',
+        # 只排除确定用不到的大型库（注意：email/html/http 是 http.server
+        # 与 urllib 的依赖，绝不能排除）
+        'tkinter', 'unittest', 'pydoc', 'doctest', 'test',
+        'multiprocessing', 'concurrent', 'asyncio', 'sqlite3',
+        'numpy', 'pandas', 'matplotlib', 'scipy', 'setuptools', 'pip',
+    ],
     noarchive=False,
-    optimize=0,
+    optimize=2,
 )
 pyz = PYZ(a.pure)
 
@@ -25,7 +34,7 @@ exe = EXE(
     name='AfterburnerWebMonitor',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
