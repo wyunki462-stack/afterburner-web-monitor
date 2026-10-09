@@ -1,5 +1,8 @@
 # AfterburnerWebMonitor
 
+> **v2.0.0 已用 Rust 完全重写** —— 内存 22 MB → **15 MB**，体积 15.3 MB → **197 KB**。
+> 无需安装 Python，单个 exe 即用。源码见 [`rust/`](rust/)，发布包见 [Releases](https://github.com/wyunki462-stack/afterburner-web-monitor/releases/latest)。
+
 把 **MSI Afterburner** 的硬件监控数据变成手机可看的实时网页。
 
 用旧手机当电脑的硬件监控副屏 —— 打游戏时随时看温度和帧数。
