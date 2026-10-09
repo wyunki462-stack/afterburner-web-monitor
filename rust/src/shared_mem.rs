@@ -56,7 +56,9 @@ pub const SRC_CPU_POWER: u32 = 0x0000_0100;
 
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct SensorItem {
+    pub id: u32,
     pub name: String,
+    pub label: String,
     pub source: String,
     pub group: String,
     pub value: f32,
