@@ -23,6 +23,8 @@ build.log
 dist_exe/
 *_x64-portable/
 *.rar
+*.zip
+*.7z
 
 # ---------- 运行时生成 ----------
 config.json
