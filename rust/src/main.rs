@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const APP_NAME: &str = "AfterburnerWebMonitor";
-const APP_VERSION: &str = "2.3.0";
+const APP_VERSION: &str = "2.4.0";
 const DEFAULT_PORT: u16 = 8777;
 const FPS_HISTORY_LEN: usize = 60;
 
