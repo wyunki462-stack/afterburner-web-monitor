@@ -687,55 +687,76 @@ def collector_loop():
         time.sleep(1)
 
 
-# ---------- Web 服务 ----------
-from flask import Flask, jsonify, render_template_string  # noqa: E402
+# ---------- Web 服务（纯标准库，无 Flask 依赖） ----------
 import logging  # noqa: E402
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
 
-app = Flask(APP_NAME)
-logging.getLogger("werkzeug").setLevel(logging.ERROR)
-app.logger.setLevel(logging.ERROR)
+LOG = logging.getLogger("abwm")
+LOG.setLevel(logging.ERROR)
+if not LOG.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    LOG.addHandler(_h)
 
 
-@app.route("/api/data")
-def api_data():
+def _json_response(handler, obj, code=200):
+    """写一个 JSON 响应。"""
+    body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+    handler.send_response(code)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _text_response(handler, text, code=200, ctype="text/html; charset=utf-8"):
+    body = text.encode("utf-8")
+    handler.send_response(code)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+# ---- 各接口的业务逻辑（与原先 Flask 版完全一致） ----
+def _h_data():
     with _cache_lock:
-        return jsonify(dict(_cache))
+        return dict(_cache), 200
 
 
-@app.route("/api/fps_history")
-def api_fps_history():
+def _h_fps_history():
     hist = get_fps_history()
     now = time.time()
-    return jsonify({
+    return {
         "points": [{"t": round(now - t, 1), "fps": f} for t, f in hist],
         "len": FPS_HISTORY_LEN,
-    })
+    }, 200
 
 
-@app.route("/api/settings", methods=["GET", "POST"])
-def api_settings():
-    from flask import request
+def _h_settings_get():
     cfg = load_config()
+    ab_path = find_exe(cfg.get("ab_path"), AB_CANDIDATES)
+    rtss_path = find_exe(cfg.get("rtss_path"), RTSS_CANDIDATES)
+    return {
+        "autostart": autostart_status(),
+        "config": {
+            "port": cfg.get("port", PORT),
+            "ab_path": ab_path,
+            "rtss_path": rtss_path,
+            "auto_start_ab": cfg.get("auto_start_ab", True),
+            "auto_start_rtss": cfg.get("auto_start_rtss", True),
+        },
+        "paths_exist": {
+            "ab": os.path.exists(ab_path),
+            "rtss": os.path.exists(rtss_path),
+        },
+    }, 200
 
-    if request.method == "GET":
-        ab_path = find_exe(cfg.get("ab_path"), AB_CANDIDATES)
-        rtss_path = find_exe(cfg.get("rtss_path"), RTSS_CANDIDATES)
-        return jsonify({
-            "autostart": autostart_status(),
-            "config": {
-                "port": cfg.get("port", PORT),
-                "ab_path": ab_path,
-                "rtss_path": rtss_path,
-                "auto_start_ab": cfg.get("auto_start_ab", True),
-                "auto_start_rtss": cfg.get("auto_start_rtss", True),
-            },
-            "paths_exist": {
-                "ab": os.path.exists(ab_path),
-                "rtss": os.path.exists(rtss_path),
-            },
-        })
 
-    body = request.get_json(silent=True) or {}
+def _h_settings_post(body):
+    cfg = load_config()
     results = {}
     if "autostart" in body:
         a = body["autostart"] or {}
@@ -758,29 +779,98 @@ def api_settings():
     if changed:
         save_config(cfg)
 
-    return jsonify({"ok": True, "results": results,
-                    "autostart": autostart_status()})
+    return {"ok": True, "results": results,
+            "autostart": autostart_status()}, 200
 
 
-@app.route("/api/start/<what>", methods=["POST"])
-def api_start(what):
+def _h_start(what):
     """从网页一键启动 Afterburner / RTSS。"""
     cfg = load_config()
     if what == "ab":
         if ab_alive():
-            return jsonify({"ok": True, "msg": "Afterburner 已在运行"})
+            return {"ok": True, "msg": "Afterburner 已在运行"}, 200
         path = find_exe(cfg.get("ab_path"), AB_CANDIDATES)
         ok = start_program(path, elevate=False)   # AB 自己有提权机制
-        return jsonify({"ok": ok, "msg": "已请求启动 Afterburner" if ok
-                        else "启动失败，请检查 Afterburner 路径"})
+        return {"ok": ok, "msg": "已请求启动 Afterburner" if ok
+                else "启动失败，请检查 Afterburner 路径"}, 200
     if what == "rtss":
         if rtss_alive():
-            return jsonify({"ok": True, "msg": "RTSS 已在运行"})
+            return {"ok": True, "msg": "RTSS 已在运行"}, 200
         path = find_exe(cfg.get("rtss_path"), RTSS_CANDIDATES)
         ok = start_program(path, elevate=True)
-        return jsonify({"ok": ok, "msg": "已请求启动 RTSS（请在弹出的窗口点\"是\"）"
-                        if ok else "启动失败，请检查 RTSS 路径"})
-    return jsonify({"ok": False, "msg": "未知的目标"}), 400
+        return {"ok": ok, "msg": "已请求启动 RTSS（请在弹出的窗口点\"是\"）"
+                if ok else "启动失败，请检查 RTSS 路径"}, 200
+    return {"ok": False, "msg": "未知的目标"}, 400
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    server_version = APP_NAME
+
+    def log_message(self, fmt, *args):
+        pass  # 静音访问日志，省 CPU
+
+    # ---------- GET ----------
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        try:
+            if path in ("/", "/index.html"):
+                return _text_response(self, PAGE)
+            if path == "/api/data":
+                obj, code = _h_data()
+                return _json_response(self, obj, code)
+            if path == "/api/fps_history":
+                obj, code = _h_fps_history()
+                return _json_response(self, obj, code)
+            if path == "/api/settings":
+                obj, code = _h_settings_get()
+                return _json_response(self, obj, code)
+            if path == "/favicon.ico":
+                return _text_response(self, "", 204, "image/x-icon")
+            return _json_response(self, {"ok": False, "msg": "not found"}, 404)
+        except BrokenPipeError:
+            pass
+        except Exception as e:
+            LOG.error(f"GET {path} 出错: {e}")
+            try:
+                _json_response(self, {"ok": False, "msg": str(e)}, 500)
+            except Exception:
+                pass
+
+    # ---------- POST ----------
+    def do_POST(self):
+        path = self.path.split("?", 1)[0]
+        try:
+            if path == "/api/settings":
+                n = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(n) if n else b""
+                try:
+                    body = json.loads(raw.decode("utf-8")) if raw else {}
+                except Exception:
+                    body = {}
+                obj, code = _h_settings_post(body)
+                return _json_response(self, obj, code)
+            if path.startswith("/api/start/"):
+                what = path.rsplit("/", 1)[-1]
+                obj, code = _h_start(what)
+                return _json_response(self, obj, code)
+            return _json_response(self, {"ok": False, "msg": "not found"}, 404)
+        except BrokenPipeError:
+            pass
+        except Exception as e:
+            LOG.error(f"POST {path} 出错: {e}")
+            try:
+                _json_response(self, {"ok": False, "msg": str(e)}, 500)
+            except Exception:
+                pass
+
+
+def run_web(port):
+    """用标准库启动多线程 HTTP 服务（替代 Flask，省内存）。"""
+    httpd = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    httpd.daemon_threads = True
+    log(f"Web 服务已启动: http://0.0.0.0:{port}")
+    httpd.serve_forever()
 
 
 PAGE = r"""<!DOCTYPE html>
@@ -1201,15 +1291,6 @@ setInterval(()=>{ if(document.getElementById('mask').classList.contains('on')) r
 </script>
 </body>
 </html>"""
-
-
-@app.route("/")
-def index():
-    return render_template_string(PAGE)
-
-
-def run_web(port):
-    app.run(host="0.0.0.0", port=port, threaded=True, debug=False, use_reloader=False)
 
 
 # ---------- 托盘图标 ----------
