@@ -1,4 +1,4 @@
-# LHMViewer
+# AfterburnerWebMonitor
 
 把 **MSI Afterburner** 的硬件监控数据变成手机可看的实时网页。
 
@@ -67,7 +67,7 @@
 
 ### 方式一：直接运行 exe（推荐普通用户）
 
-1. 从 [Releases](../../releases) 下载 `LHMViewer.exe`
+1. 从 [Releases](../../releases) 下载 `AfterburnerWebMonitor.exe`
 2. 双击运行
 3. 首次会弹 UAC 提权框（用于读取传感器），点"是"
 4. 弹出提示框会显示手机访问地址，例如 `http://192.168.4.9:8777`
@@ -77,17 +77,17 @@
 
 ```bash
 pip install flask pystray Pillow
-python LHMViewer.py
+python AfterburnerWebMonitor.py
 ```
 
 ### 自己打包 exe
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --onefile --windowed --name LHMViewer --icon LHMViewer.ico LHMViewer.py
+pyinstaller --noconfirm --onefile --windowed --name AfterburnerWebMonitor --icon AfterburnerWebMonitor.ico AfterburnerWebMonitor.py
 ```
 
-产物在 `dist/LHMViewer.exe`。
+产物在 `dist/AfterburnerWebMonitor.exe`。
 
 ---
 
@@ -166,7 +166,7 @@ pyinstaller --noconfirm --onefile --windowed --name LHMViewer --icon LHMViewer.i
 - 或手动放行：
 
 ```bash
-netsh advfirewall firewall add rule name="LHMViewer" dir=in action=allow protocol=TCP localport=8777
+netsh advfirewall firewall add rule name="AfterburnerWebMonitor" dir=in action=allow protocol=TCP localport=8777
 ```
 
 **Q: CPU 温度显示不出来？**
@@ -175,7 +175,7 @@ netsh advfirewall firewall add rule name="LHMViewer" dir=in action=allow protoco
 
 **Q: 端口被占用？**
 
-说明已有一个实例在运行。任务管理器结束旧的 `LHMViewer.exe`，或改 `config.json` 的 `port`。
+说明已有一个实例在运行。任务管理器结束旧的 `AfterburnerWebMonitor.exe`，或改 `config.json` 的 `port`。
 
 ---
 
