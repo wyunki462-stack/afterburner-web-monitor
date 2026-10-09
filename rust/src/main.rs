@@ -11,12 +11,13 @@ mod rtss;
 mod web;
 mod config;
 mod util;
+mod tray;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const APP_NAME: &str = "AfterburnerWebMonitor";
-const APP_VERSION: &str = "2.1.0";
+const APP_VERSION: &str = "2.2.0";
 const DEFAULT_PORT: u16 = 8777;
 const FPS_HISTORY_LEN: usize = 60;
 
@@ -79,16 +80,26 @@ fn main() {
     let url = format!("http://{}:{}", ip, port);
     util::log(&format!("手机访问地址: {}", url));
 
-    // 弹窗提示
-    let tip = format!(
-        "{} 已启动\n\n手机浏览器访问：\n{}\n\n\
-         数据来自 Afterburner 的 OSD 勾选项，\n\
-         在 Afterburner 里改勾选，网页自动跟随。\n\n\
-         点击「确定」后程序在后台运行，\n可从托盘图标退出。",
-        APP_NAME, url
-    );
-    util::log("弹窗提示");
-    util::msgbox(&tip, APP_NAME);
+    // 弹窗提示（--no-dialog / --silent 可跳过，适合开机自启）
+    let silent = std::env::args().any(|a| a == "--no-dialog" || a == "--silent");
+    if !silent {
+        let tip = format!(
+            "{} 已启动\n\n手机浏览器访问：\n{}\n\n\
+             数据来自 Afterburner 的 OSD 勾选项，\n\
+             在 Afterburner 里改勾选，网页自动跟随。\n\n\
+             点击「确定」后程序在系统托盘运行，\n\
+             右键托盘图标可退出。",
+            APP_NAME, url
+        );
+        util::log("弹窗提示");
+        util::msgbox(&tip, APP_NAME);
+    } else {
+        util::log("静默模式，跳过弹窗");
+    }
+
+    // 进入托盘消息循环，保持进程常驻（关键：否则 main 结束进程就退出了）
+    util::log("进入托盘消息循环");
+    tray::run(&url);
 
     util::log("=== 程序退出 ===");
 }
