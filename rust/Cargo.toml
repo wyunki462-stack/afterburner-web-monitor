@@ -1,0 +1,33 @@
+[package]
+name = "afterburner-web-monitor"
+version = "2.0.0"
+edition = "2021"
+description = "把 MSI Afterburner 的硬件监控数据变成手机可看的网页"
+authors = ["wyunki"]
+license = "MIT"
+
+[[bin]]
+name = "AfterburnerWebMonitor"
+path = "src/main.rs"
+
+[dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_System_Registry",
+    "Win32_System_Console",
+    "Win32_Globalization",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "z"      # 优化体积
+lto = true           # 链接时优化
+codegen-units = 1    # 单编译单元，更好的优化
+strip = true         # 剥离符号
+panic = "abort"      # 去掉 unwinding，减小体积
