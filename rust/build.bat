@@ -1,5 +1,5 @@
 @echo off
-REM Build script: AfterburnerWebMonitor v2.2.0 (Rust)
+REM Build script: AfterburnerWebMonitor v2.4.0 (Rust)
 REM Notes:
 REM  - Bypass rustup shim, call real toolchain binary directly
 REM  - CARGO_TARGET_DIR must be a pure-ASCII path, otherwise GNU ld
