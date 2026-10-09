@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1117">
+<title>硬件监控</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0f1117;color:#e8eaf0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+     padding:14px;min-height:100vh}
+body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height:100vw;
+     position:absolute;top:0;left:100vw;overflow-y:auto}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.header h1{font-size:17px;font-weight:600;letter-spacing:.5px}
+.status{font-size:11px;color:#5b6272;display:flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;background:#2ecc71;animation:pulse 1.4s infinite}
+.dot.off{background:#e74c3c;animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.card{background:#1a1d27;border-radius:14px;padding:14px 12px;position:relative;overflow:hidden;
+      border:1px solid #232733}
+.grid3 .card{padding:11px 9px}
+.grid3 .value{font-size:20px}
+.label{font-size:11px;color:#7a8296;margin-bottom:7px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.value{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.value .unit{font-size:12px;font-weight:500;color:#7a8296;margin-left:2px}
+.bar{height:5px;background:#252a37;border-radius:3px;margin-top:9px;overflow:hidden}
+.bar > i{display:block;height:100%;border-radius:3px;transition:width .5s ease,background .5s ease}
+.section-tag{font-size:12px;color:#6b7385;font-weight:600;margin:16px 0 8px;
+             letter-spacing:1.5px;text-transform:uppercase}
+.t-cool{color:#3fa9f5}.t-warm{color:#f5c542}.t-hot{color:#ff5c5c}
+.footer{text-align:center;font-size:10px;color:#4a5164;margin-top:16px;padding-bottom:8px}
+.rotbtn{background:#232733;border:none;color:#9aa3b8;font-size:11px;padding:5px 10px;
+        border-radius:8px;cursor:pointer}
+.rotbtn:active{background:#2d3342}
+.warn{background:#2a1f1f;border:1px solid #4a2626;color:#ff8a8a;font-size:11px;
+      padding:10px 12px;border-radius:8px;margin-bottom:10px;line-height:1.6}
+.warn b{color:#ffb3b3}
+
+/* 帧数卡片 */
+.fps-card{background:#1a1d27;border:1px solid #232733;border-radius:14px;
+      padding:14px 12px;margin-bottom:12px;position:relative;overflow:hidden}
+.fps-card .app-name{font-size:12px;color:#7a8296;margin-bottom:7px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%}
+.fps-card .row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.fps-card .fps-val{font-size:32px;font-weight:700;line-height:1.05;
+      font-variant-numeric:tabular-nums;color:#7c5cff}
+.fps-card .fps-val.idle{color:#4a5164}
+.fps-card .fps-val .unit{font-size:12px;font-weight:500;color:#7a8296;margin-left:3px}
+.fps-card .lows{display:flex;gap:14px;font-size:11px;color:#7a8296;
+      font-variant-numeric:tabular-nums;padding-bottom:3px;flex-wrap:wrap;justify-content:flex-end}
+.fps-card .lows b{color:#e8eaf0;font-weight:600}
+.spark{margin-top:10px;width:100%;height:56px;display:block}
+.spark-empty{height:56px;display:flex;align-items:center;justify-content:center;
+      font-size:11px;color:#4a5164;margin-top:10px;
+      border-top:1px dashed #232733}
+
+/* 设置面板 */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;z-index:50;
+      align-items:flex-end;justify-content:center}
+.mask.on{display:flex}
+.panel{background:#161a24;width:100%;max-width:520px;border-radius:18px 18px 0 0;
+      padding:18px 16px 26px;max-height:88vh;overflow-y:auto;
+      border-top:1px solid #2a3040}
+.panel h2{font-size:15px;font-weight:600;margin-bottom:4px}
+.panel .sub{font-size:11px;color:#6b7385;margin-bottom:16px}
+.set-item{display:flex;justify-content:space-between;align-items:center;
+      padding:13px 0;border-bottom:1px solid #1f2432}
+.set-item:last-of-type{border-bottom:none}
+.set-item .t{font-size:13px;color:#dfe3ec}
+.set-item .d{font-size:11px;color:#6b7385;margin-top:3px;line-height:1.5}
+.set-item .d.warn-t{color:#e8a33d}
+.sw{position:relative;width:44px;height:25px;flex:none;margin-left:12px}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw i{position:absolute;inset:0;background:#2b3040;border-radius:13px;
+      transition:.22s;cursor:pointer}
+.sw i:before{content:"";position:absolute;width:19px;height:19px;left:3px;top:3px;
+      background:#8a90a0;border-radius:50%;transition:.22s}
+.sw input:checked + i{background:#5a3fd6}
+.sw input:checked + i:before{transform:translateX(19px);background:#fff}
+.sw input:disabled + i{opacity:.45;cursor:not-allowed}
+.closebar{margin-top:18px;display:flex;gap:10px}
+.btn{flex:1;background:#232733;border:none;color:#cfd4e0;font-size:13px;
+      padding:11px;border-radius:11px;cursor:pointer}
+.btn.pri{background:#5a3fd6;color:#fff}
+.btn:active{opacity:.85}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
+      background:#2d3342;color:#e8eaf0;font-size:12px;padding:10px 18px;border-radius:10px;
+      opacity:0;pointer-events:none;transition:.25s;z-index:99;
+      border:1px solid #3a4256;max-width:88vw;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.hint{font-size:11px;color:#5b6272;line-height:1.6;margin-top:10px;
+      padding:10px 12px;background:#141822;border-radius:9px;border:1px solid #1f2432}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>硬件监控</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="rotbtn" onclick="openSet()">设置</button>
+    <button class="rotbtn" onclick="toggleRotate()">转屏</button>
+    <div class="status"><span class="dot" id="dot"></span><span id="stat">连接中</span></div>
+  </div>
+</div>
+
+<div id="warnWrap"></div>
+<div id="fpsWrap"></div>
+<div id="gpuWrap"></div>
+<div id="cpuWrap"></div>
+<div id="ramWrap"></div>
+<div id="otherWrap"></div>
+
+<div class="footer" id="foot">—</div>
+
+<div class="mask" id="mask" onclick="if(event.target===this)closeSet()">
+  <div class="panel">
+    <h2>设置</h2>
+    <div class="sub">数据来自 MSI Afterburner —— 在它的 OSD 上勾选什么，这里就显示什么</div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">AfterburnerWebMonitor 开机自启</div>
+        <div class="d">开机后自动启动本监控服务</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="sw_app" onchange="saveSet()"><i></i></label>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">MSI Afterburner 开机自启</div>
+        <div class="d warn-t">不启动 Afterburner 就没有任何数据</div>
+        <div class="d">传感器数据（温度 / 占用 / 频率）都来自它</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="sw_ab" onchange="saveSet()"><i></i></label>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">RTSS 开机自启</div>
+        <div class="d warn-t">不启动 RTSS 就无法读取帧数</div>
+        <div class="d">RTSS 负责统计游戏帧率（Afterburner 会带起它）</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="sw_rtss" onchange="saveSet()"><i></i></label>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">启动 Afterburner</div>
+        <div class="d" id="abState">检测中…</div>
+      </div>
+      <button class="rotbtn" onclick="startProg('ab')">启动</button>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">启动 RTSS</div>
+        <div class="d" id="rtssState">检测中…</div>
+      </div>
+      <button class="rotbtn" onclick="startProg('rtss')">启动</button>
+    </div>
+
+    <div class="hint" id="osdHint">—</div>
+
+    <div class="closebar">
+      <button class="btn pri" onclick="closeSet()">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function barColor(pct){ return pct<60?'#2ecc71':(pct<85?'#f5c542':'#e74c3c'); }
+function bar(pct){
+  if(pct==null) return '';
+  return `<div class="bar"><i style="width:${Math.min(pct,100)}%;background:${barColor(pct)}"></i></div>`;
+}
+function tempCls(t){ return t==null?'':(t<60?'t-cool':(t<80?'t-warm':'t-hot')); }
+function num(v,d){ return v==null?'--':Number(v).toFixed(d==null?0:d); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- 折线图（60 秒帧率） ---------- */
+let hist = [];
+function drawSpark(){
+  const W = 300, H = 56, PAD = 3;
+  const pts = hist;
+  if (pts.length < 2) return '<div class="spark-empty">等待帧率数据…</div>';
+  const vals = pts.map(p=>p.fps).filter(v=>v!=null);
+  if (!vals.length) return '<div class="spark-empty">RTSS 就绪，等待游戏运行…</div>';
+  let mx = Math.max.apply(null, vals), mn = Math.min.apply(null, vals);
+  if (mx === mn) { mx += 1; mn -= 1; }
+  const lo = Math.max(0, mn - (mx-mn)*0.15), hi = mx + (mx-mn)*0.12;
+  const n = pts.length;
+  const X = i => PAD + i * (W - PAD*2) / Math.max(n-1, 1);
+  const Y = v => H - PAD - (v - lo) / (hi - lo) * (H - PAD*2);
+  const segs = []; let seg = [];
+  pts.forEach((p,i)=>{
+    if (p.fps == null) { if (seg.length) { segs.push(seg); seg = []; } return; }
+    seg.push([X(i), Y(p.fps)]);
+  });
+  if (seg.length) segs.push(seg);
+  let paths = '';
+  segs.forEach(s=>{
+    if (s.length === 1) {
+      paths += `<circle cx="${s[0][0].toFixed(1)}" cy="${s[0][1].toFixed(1)}" r="1.6" fill="#7c5cff"/>`;
+      return;
+    }
+    const d = s.map((q,i)=> (i?'L':'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join(' ');
+    paths += `<path d="${d} L ${s[s.length-1][0].toFixed(1)} ${H-PAD} L ${s[0][0].toFixed(1)} ${H-PAD} Z" fill="rgba(124,92,255,.13)" stroke="none"/>`;
+    paths += `<path d="${d}" fill="none" stroke="#7c5cff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" y1="${H-PAD}" x2="${W}" y2="${H-PAD}" stroke="#232733" stroke-width="1"/>
+    ${paths}
+    <text x="${W-2}" y="11" text-anchor="end" font-size="9" fill="#5b6272">${Math.round(hi)}</text>
+    <text x="${W-2}" y="${H-4}" text-anchor="end" font-size="9" fill="#5b6272">${Math.round(lo)}</text>
+  </svg>`;
+}
+
+/* ---------- 帧数卡片（数据来自 RTSS） ---------- */
+function renderFps(r){
+  if (!r || !r.running) return '';
+  const fps = r.fps != null ? r.fps : null;
+  const app = r.app || 'RTSS 已就绪';
+  let main = fps != null
+    ? `<div class="fps-val">${num(fps,1)}<span class="unit">FPS</span></div>`
+    : `<div class="fps-val idle">--<span class="unit">FPS</span></div>`;
+  let lows = '';
+  if (fps != null) {
+    const parts = [];
+    if (r.fps_1pct_low != null)  parts.push(`<span>1% low <b>${num(r.fps_1pct_low)}</b></span>`);
+    if (r.fps_01pct_low != null) parts.push(`<span>0.1% low <b>${num(r.fps_01pct_low)}</b></span>`);
+    if (r.frametime != null)     parts.push(`<span>帧时间 <b>${r.frametime}</b> ms</span>`);
+    if (parts.length) lows = `<div class="lows">${parts.join('')}</div>`;
+  }
+  return `<div class="fps-card">
+    <div class="app-name">${esc(app)}</div>
+    <div class="row">${main}${lows}</div>
+    ${drawSpark()}
+  </div>`;
+}
+
+/* ---------- 通用卡片（数据来自 Afterburner OSD 项） ---------- */
+function card(it){
+  const val = it.value;
+  const unit = it.unit || '';
+  let cls = '';
+  // 温度类着色
+  if ((it.id===0x00 || it.id===0x80) && val!=null) cls = tempCls(val);
+  // 百分比类显示进度条
+  let b = '';
+  if (unit === '%' && val != null) {
+    const pct = (it.id===0x60) ? val : val;   // 相对功耗也是 %
+    b = bar(pct);
+  }
+  const showUnit = unit && unit !== '';
+  return `<div class="card">
+    <div class="label">${esc(it.label)}</div>
+    <div class="value ${cls}">${num(val, val!=null && Math.abs(val)<1000 && val%1!==0 ? 1 : 0)}${showUnit?`<span class="unit">${esc(unit)}</span>`:''}</div>
+    ${b}
+  </div>`;
+}
+
+function renderGroup(items, title, cols){
+  if (!items.length) return '';
+  const cls = cols===3 ? 'grid3' : 'grid';
+  return `<div class="section-tag">${title}</div><div class="${cls}">`
+       + items.map(card).join('') + `</div>`;
+}
+
+function render(d){
+  const ab = d.ab || {};
+  const items = ab.items || [];
+  const abOk = !!ab.ok;
+  const rt = d.rtss || {};
+
+  /* ---- 警告条 ---- */
+  let warn = '';
+  if (!abOk) {
+    warn = `<div class="warn">⚠ <b>Afterburner 未运行</b> —— 没有传感器数据。<br>
+      请在 <b>设置</b> 里启动它，或手动打开 MSI Afterburner。</div>`;
+  }
+  document.getElementById('warnWrap').innerHTML = warn;
+
+  /* ---- 帧数卡片 ---- */
+  document.getElementById('fpsWrap').innerHTML = renderFps(rt);
+
+  /* ---- 按分组渲染 OSD 项 ---- */
+  const byGroup = {gpu:[], cpu:[], ram:[], fps:[], other:[]};
+  items.forEach(it => (byGroup[it.group] || byGroup.other).push(it));
+
+  /* 帧率相关的项不重复显示（已在帧数卡片里），除非 RTSS 没运行 */
+  if (rt.running) byGroup.fps = [];
+
+  document.getElementById('gpuWrap').innerHTML  = renderGroup(byGroup.gpu, 'GPU');
+  document.getElementById('cpuWrap').innerHTML  = renderGroup(byGroup.cpu, 'CPU');
+  document.getElementById('ramWrap').innerHTML  = renderGroup(byGroup.ram, '内存');
+  document.getElementById('otherWrap').innerHTML= renderGroup(byGroup.other, '其他');
+
+  /* ---- 没有 OSD 项时给个提示 ---- */
+  if (abOk && items.length === 0) {
+    document.getElementById('gpuWrap').innerHTML =
+      `<div class="warn">Afterburner 在运行，但没有勾选任何 OSD 监控项。<br>
+       请打开 Afterburner 的 <b>设置 → 监控</b>，<br>
+       对想看的项目逐个点 <b>「在 OSD 上显示」</b>。</div>`;
+  }
+
+  /* ---- 状态灯 ---- */
+  let ok = abOk, txt = abOk ? '实时' : '无数据';
+  if (rt.running && rt.fps != null) { ok = true; txt = '实时 · '+num(rt.fps)+'fps'; }
+  document.getElementById('dot').className = ok ? 'dot' : 'dot off';
+  document.getElementById('stat').textContent = txt;
+
+  const t = d.ts ? new Date(d.ts*1000) : null;
+  const cnt = items.length ? ` · OSD ${items.length} 项` : '';
+  document.getElementById('foot').textContent =
+    (t ? '更新 ' + t.toLocaleTimeString('zh-CN') : '—') + cnt;
+}
+
+async function tick(){
+  try{
+    const r = await fetch('/api/data',{cache:'no-store'});
+    const d = await r.json();
+    try{
+      const h = await fetch('/api/fps_history',{cache:'no-store'});
+      hist = (await h.json()).points || [];
+    }catch(e){}
+    render(d);
+  }catch(e){
+    document.getElementById('dot').className='dot off';
+    document.getElementById('stat').textContent='断开';
+  }
+}
+function toggleRotate(){ document.body.classList.toggle('rotate'); }
+
+/* ---------- 设置面板 ---------- */
+let settingsLoaded = false;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>t.classList.remove('on'), 2400);
+}
+function openSet(){ document.getElementById('mask').classList.add('on'); loadSet(); }
+function closeSet(){ document.getElementById('mask').classList.remove('on'); }
+
+async function loadSet(){
+  try{
+    const r = await fetch('/api/settings',{cache:'no-store'});
+    const d = await r.json();
+    const a = d.autostart || {};
+    document.getElementById('sw_app').checked  = !!a.app;
+    document.getElementById('sw_ab').checked   = !!a.ab;
+    document.getElementById('sw_rtss').checked = !!a.rtss;
+    const pe = d.paths_exist || {};
+    document.getElementById('sw_ab').disabled   = !pe.ab;
+    document.getElementById('sw_rtss').disabled = !pe.rtss;
+    settingsLoaded = true;
+    refreshStates();
+  }catch(e){ toast('读取设置失败'); }
+}
+
+async function refreshStates(){
+  try{
+    const r = await fetch('/api/data',{cache:'no-store'});
+    const d = await r.json();
+    const ab = d.ab || {}, rt = d.rtss || {};
+    document.getElementById('abState').textContent =
+      ab.ok ? `运行中 · 共 ${ab.all_count||0} 项，OSD ${ab.osd_count||0} 项`
+            : '未运行 —— 没有任何数据';
+    document.getElementById('rtssState').textContent =
+      rt.running ? (rt.fps!=null ? `运行中 · ${num(rt.fps)} fps` : '运行中 · 等待游戏')
+                 : '未运行 —— 没有帧数数据';
+    document.getElementById('osdHint').innerHTML = ab.ok
+      ? `当前 OSD 显示 <b style="color:#9aa3b8">${ab.osd_count||0}</b> 项，共配置 ${ab.all_count||0} 项。<br>
+         想改显示内容？打开 Afterburner → 设置 → 监控，勾选需要项。<br>
+         网页会自动跟随，<b style="color:#9aa3b8">不用改任何代码</b>。`
+      : `Afterburner 未运行。启动后这里会显示它配置的监控项数量。`;
+  }catch(e){}
+}
+
+async function saveSet(){
+  if(!settingsLoaded) return;
+  const body = { autostart: {
+    app:  document.getElementById('sw_app').checked,
+    ab:   document.getElementById('sw_ab').checked,
+    rtss: document.getElementById('sw_rtss').checked,
+  }};
+  try{
+    await fetch('/api/settings',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    toast('设置已保存');
+  }catch(e){ toast('保存失败'); }
+}
+
+async function startProg(what){
+  const el = document.getElementById(what==='ab' ? 'abState' : 'rtssState');
+  el.textContent = '正在启动…';
+  try{
+    const r = await fetch('/api/start/'+what,{method:'POST'});
+    const d = await r.json();
+    toast(d.msg || '已请求启动');
+    setTimeout(refreshStates, 3000);
+  }catch(e){ toast('启动失败'); }
+}
+
+tick();
+setInterval(tick, 1000);
+setInterval(()=>{ if(document.getElementById('mask').classList.contains('on')) refreshStates(); }, 3000);
+</script>
+</body>
+</html>
