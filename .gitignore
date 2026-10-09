@@ -21,6 +21,8 @@ build.log
 发布/
 发布 - 副本/
 dist_exe/
+*_x64-portable/
+*.rar
 
 # ---------- 运行时生成 ----------
 config.json
