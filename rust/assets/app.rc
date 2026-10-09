@@ -1,0 +1,4 @@
+/* Windows 资源脚本：把图标嵌入 exe
+ * 资源 ID 用 1 —— Windows 会把 ID 最小的图标当作程序主图标，
+ * 任务栏、Alt-Tab、文件管理器里显示的都是它。 */
+1 ICON "assets/AfterburnerWebMonitor.ico"
