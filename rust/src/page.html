@@ -223,18 +223,19 @@ function drawSpark(){
 
 /* ---------- 帧数卡片（数据来自 RTSS） ---------- */
 function renderFps(r){
-  if (!r || !r.running) return '';
+  if (!r || (!r.running && r.fps == null)) return '';
   const fps = r.fps != null ? r.fps : null;
-  const app = r.app || 'RTSS 已就绪';
+  const app = r.app || (r.running ? 'RTSS 已就绪' : 'Afterburner 帧率');
   let main = fps != null
     ? `<div class="fps-val">${num(fps,1)}<span class="unit">FPS</span></div>`
     : `<div class="fps-val idle">--<span class="unit">FPS</span></div>`;
   let lows = '';
   if (fps != null) {
     const parts = [];
-    if (r.fps_1pct_low != null)  parts.push(`<span>1% low <b>${num(r.fps_1pct_low)}</b></span>`);
-    if (r.fps_01pct_low != null) parts.push(`<span>0.1% low <b>${num(r.fps_01pct_low)}</b></span>`);
-    if (r.frametime != null)     parts.push(`<span>帧时间 <b>${r.frametime}</b> ms</span>`);
+    if (r.fps_avg != null)       parts.push(`<span>平均 <b>${num(r.fps_avg,1)}</b></span>`);
+    if (r.fps_1pct_low != null)  parts.push(`<span>1% low <b>${num(r.fps_1pct_low,1)}</b></span>`);
+    if (r.fps_01pct_low != null) parts.push(`<span>0.1% low <b>${num(r.fps_01pct_low,1)}</b></span>`);
+    if (r.frametime != null)     parts.push(`<span>帧时间 <b>${num(r.frametime,2)}</b> ms</span>`);
     if (parts.length) lows = `<div class="lows">${parts.join('')}</div>`;
   }
   return `<div class="fps-card">
@@ -294,7 +295,7 @@ function render(d){
   items.forEach(it => (byGroup[it.group] || byGroup.other).push(it));
 
   /* 帧率相关的项不重复显示（已在帧数卡片里），除非 RTSS 没运行 */
-  if (rt.running) byGroup.fps = [];
+  if (rt.fps != null) byGroup.fps = [];
 
   document.getElementById('gpuWrap').innerHTML  = renderGroup(byGroup.gpu, 'GPU');
   document.getElementById('cpuWrap').innerHTML  = renderGroup(byGroup.cpu, 'CPU');
@@ -311,7 +312,7 @@ function render(d){
 
   /* ---- 状态灯 ---- */
   let ok = abOk, txt = abOk ? '实时' : '无数据';
-  if (rt.running && rt.fps != null) { ok = true; txt = '实时 · '+num(rt.fps)+'fps'; }
+  if (rt.fps != null) { ok = true; txt = '实时 · '+num(rt.fps)+'fps'; }
   document.getElementById('dot').className = ok ? 'dot' : 'dot off';
   document.getElementById('stat').textContent = txt;
 
