@@ -29,7 +29,7 @@ import webbrowser
 
 # ---------- 常量 ----------
 APP_NAME = "AfterburnerWebMonitor"
-APP_VERSION = "3.0"
+APP_VERSION = "1.0.0"
 PORT = 8777
 
 # 默认程序路径（可在 config.json 里覆盖）
