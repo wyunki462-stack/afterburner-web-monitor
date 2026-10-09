@@ -60,32 +60,45 @@ pub fn read() -> MahmData {
 
     let mut items = Vec::new();
     let mut osd_count = 0u32;
+    let mut seen: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
 
     for i in 0..num as usize {
         let base = hdr_size + i * esize;
-        let src_id = map.u32_at(base + E_SRCID);
         let flags = map.u32_at(base + E_FLAGS);
+
+        // 只读取 Afterburner 里勾选了「在 OSD 上显示」的项
+        if (flags & MAHM_FLAG_SHOW_IN_OSD) == 0 {
+            continue;
+        }
+        osd_count += 1;
+
+        let src_id = map.u32_at(base + E_SRCID);
         let gpu = map.u32_at(base + E_GPU);
 
-        let is_osd = (flags & MAHM_FLAG_SHOW_IN_OSD) != 0;
-        if is_osd {
-            osd_count += 1;
+        // 去重：同 (源ID, GPU) 只保留第一个
+        if !seen.insert((src_id, gpu)) {
+            continue;
         }
 
         let value = map.f32_at(base + E_DATA);
-        // FLT_MAX 表示数据不可用，跳过
+        // Afterburner 用 FLT_MAX 表示数据当前不可用（如没游戏时的帧率）
         if value.is_nan() || value >= FLT_MAX * 0.99 {
-            if is_osd {
-                // 保留但标记为不可用？此处直接跳过更干净
-            }
             continue;
         }
 
         let srcname = map.cstr_at(base + E_SRCNAME, M);
         let units = map.cstr_at(base + E_UNITS, M);
+        let label = source_label(src_id);
+        let label = if label.is_empty() {
+            srcname.clone()
+        } else {
+            label.to_string()
+        };
 
         items.push(SensorItem {
+            id: src_id,
             name: srcname,
+            label,
             source: source_label(src_id).to_string(),
             group: source_group(src_id).to_string(),
             value: (value * 100.0).round() / 100.0,
