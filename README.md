@@ -76,15 +76,17 @@
 ### 方式二：从源码运行（开发者）
 
 ```bash
-pip install flask pystray Pillow
+pip install pystray Pillow
 python AfterburnerWebMonitor.py
 ```
+
+> Web 服务基于 Python 标准库 `http.server`，**无需 Flask**。
 
 ### 自己打包 exe
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --onefile --windowed --name AfterburnerWebMonitor --icon AfterburnerWebMonitor.ico AfterburnerWebMonitor.py
+pyinstaller --noconfirm --clean AfterburnerWebMonitor.spec
 ```
 
 产物在 `dist/AfterburnerWebMonitor.exe`。
@@ -212,5 +214,5 @@ MIT
 ## 致谢
 
 - [MSI Afterburner](https://www.msi.com/Landing/afterburner) / [RivaTuner Statistics Server](https://www.guru3d.com/files-details/rtss-rivatuner-statistics-server-download.html) —— 数据源
-- [Flask](https://flask.palletsprojects.com/) —— Web 服务
+- Python 标准库 `http.server` —— Web 服务（无需第三方框架）
 - [pystray](https://github.com/moses-palmer/pystray) —— 托盘图标
