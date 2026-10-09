@@ -1,5 +1,10 @@
 //! RTSS 共享内存读取（帧率数据）
+//!
+//! 注意：RTSS 的 `dwAppArrSize` 实测存的是「条目数量」(MAX_APPS = 256)，
+//! 而不是 SDK 注释里写的字节数。早期版本按字节数换算会得到 0 个槽位，
+//! 导致帧率永远读不到。这里做了自适应兼容。
 
+use crate::shared_mem::{MahmData, SRC_FRAMERATE, SRC_FPS_01LOW, SRC_FPS_1LOW, SRC_FPS_AVG};
 use crate::util::Mapping;
 use serde::Serialize;
 
@@ -19,101 +24,90 @@ const E_FLAGS: usize = E_NAME + NAME_LEN; // 264
 const E_TIME0: usize = E_FLAGS + 4; // 268
 const E_TIME1: usize = E_TIME0 + 4; // 272
 const E_FRAMES: usize = E_TIME1 + 4; // 276
-const E_FRAMETIME: usize = E_FRAMES + 4; // 280
-const E_STATFLAGS: usize = E_FRAMETIME + 4; // 284
-const E_STATCOUNT: usize = E_STATFLAGS + 16; // 300
-const E_STATFPS_MIN: usize = E_STATCOUNT + 4; // 304
-const E_STATFPS_AVG: usize = E_STATFPS_MIN + 4; // 308
-const E_STATFPS_MAX: usize = E_STATFPS_AVG + 4; // 312
 
-/// 实测验证的 1% low 偏移（不要手算）
-const E_FPS_1PCT_LOW: usize = 9172;
-const E_FPS_01PCT_LOW: usize = 9176;
-
+/// 单个被 RTSS 统计的应用
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct AppFps {
     pub pid: u32,
     pub app: String,
     pub fps: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub frametime: Option<f32>,
-    pub fps_min: Option<f32>,
-    pub fps_avg: Option<f32>,
-    pub fps_max: Option<f32>,
-    pub low_1pct: Option<f32>,
-    pub low_01pct: Option<f32>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct RtssData {
+    /// RTSS 是否在运行（共享内存签名有效）
     pub running: bool,
+    /// 正在渲染的应用，按帧率降序
     pub apps: Vec<AppFps>,
+
+    // ---- 扁平字段：前端帧率卡片直接读这几个 ----
+    /// 主帧率（与 Afterburner OSD 上显示的一致）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fps: Option<f32>,
+    /// 主帧率对应的应用名
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frametime: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fps_avg: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fps_1pct_low: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fps_01pct_low: Option<f32>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
-impl Default for RtssData {
-    fn default() -> Self {
-        Self {
-            running: false,
-            apps: Vec::new(),
-            error: None,
-        }
-    }
-}
-
 impl RtssData {
-    /// 主帧率（取第一个有帧率数据的应用）
+    /// 主帧率（供 60 秒历史曲线使用）
     pub fn primary_fps(&self) -> Option<f32> {
-        self.apps
-            .iter()
-            .find(|a| a.fps > 0.0)
-            .map(|a| a.fps)
+        self.fps
     }
 }
 
 pub fn read() -> RtssData {
+    let mut out = RtssData::default();
+
     let map = match Mapping::open(RTSS_NAME) {
         Some(m) => m,
         None => {
-            return RtssData {
-                running: false,
-                apps: Vec::new(),
-                error: Some("RTSS 未运行".into()),
-            }
+            out.error = Some("RTSS 未运行".into());
+            return out;
         }
     };
 
     let sig = map.u32_at(OFF_SIG);
-    if sig == RTSS_SIG_DEAD {
-        return RtssData {
-            running: false,
-            apps: Vec::new(),
-            error: Some("RTSS 未运行".into()),
-        };
+    if sig == RTSS_SIG_DEAD || sig != RTSS_SIG {
+        out.error = Some(if sig == RTSS_SIG_DEAD {
+            "RTSS 未运行".into()
+        } else {
+            format!("RTSS 签名异常: 0x{:X}", sig)
+        });
+        return out;
     }
-    if sig != RTSS_SIG {
-        return RtssData {
-            running: false,
-            apps: Vec::new(),
-            error: Some(format!("RTSS 签名异常: 0x{:X}", sig)),
-        };
-    }
+
+    out.running = true;
 
     let entry_size = map.u32_at(OFF_APP_ENTRY_SIZE) as usize;
     let arr_off = map.u32_at(OFF_APP_ARR_OFFSET) as usize;
     let arr_size = map.u32_at(OFF_APP_ARR_SIZE) as usize;
 
     if entry_size == 0 || arr_size == 0 {
-        return RtssData {
-            running: true,
-            apps: Vec::new(),
-            error: None,
-        };
+        return out;
     }
 
-    let count = arr_size / entry_size;
-    let mut apps = Vec::new();
+    // 自适应：小数值按「条目数量」解释，大数值按「字节数」解释
+    let count = if arr_size <= 4096 {
+        arr_size
+    } else {
+        arr_size / entry_size
+    };
 
+    let mut apps = Vec::new();
     for i in 0..count {
         let base = arr_off + i * entry_size;
         let pid = map.u32_at(base + E_PID);
@@ -121,82 +115,82 @@ pub fn read() -> RtssData {
             continue;
         }
 
-        let name = map.cstr_at(base + E_NAME, NAME_LEN);
         let t0 = map.u32_at(base + E_TIME0);
         let t1 = map.u32_at(base + E_TIME1);
         let frames = map.u32_at(base + E_FRAMES);
-        let frametime = map.u32_at(base + E_FRAMETIME);
 
-        let dt = if t1 > t0 {
-            (t1 - t0) as f32 / 1000.0
-        } else {
-            0.0
-        };
-        let fps = if dt > 0.0 {
-            frames as f32 / dt
-        } else {
-            0.0
-        };
+        // 只保留真正在渲染的条目（时间窗口有效且出了帧）
+        if t1 <= t0 || frames == 0 {
+            continue;
+        }
 
-        // 统计数据（仅当有统计标志时才有意义）
-        let statflags = map.u32_at(base + E_STATFLAGS);
-        let has_stat = statflags != 0;
-
-        let (fps_min, fps_avg, fps_max) = if has_stat {
-            let cnt = map.u32_at(base + E_STATCOUNT) as f32;
-            let mn = map.f32_at(base + E_STATFPS_MIN);
-            let mx = map.f32_at(base + E_STATFPS_MAX);
-            let sum = map.f32_at(base + E_STATFPS_AVG);
-            let avg = if cnt > 0.0 { sum / cnt } else { 0.0 };
-            (
-                if mn > 0.0 { Some(mn) } else { None },
-                if avg > 0.0 { Some(avg) } else { None },
-                if mx > 0.0 { Some(mx) } else { None },
-            )
-        } else {
-            (None, None, None)
-        };
-
-        let low1 = map.f32_at(base + E_FPS_1PCT_LOW);
-        let low01 = map.f32_at(base + E_FPS_01PCT_LOW);
-
-        let clean = |v: f32| -> Option<f32> {
-            if v.is_finite() && v > 0.0 && v < 1e6 {
-                Some((v * 10.0).round() / 10.0)
-            } else {
-                None
-            }
-        };
+        // dwTime0/dwTime1 单位 = 毫秒；已验证 (t1-t0)/1000 得秒
+        let dt_ms = (t1 - t0) as f32;
+        let fps = frames as f32 * 1000.0 / dt_ms;
+        if !fps.is_finite() || fps <= 0.1 {
+            continue;
+        }
 
         apps.push(AppFps {
             pid,
-            app: name,
+            app: map.cstr_at(base + E_NAME, NAME_LEN),
             fps: (fps * 10.0).round() / 10.0,
-            frametime: if frametime > 0 {
-                Some((frametime as f32 / 1000.0 * 100.0).round() / 100.0)
-            } else {
-                None
-            },
-            fps_min,
-            fps_avg,
-            fps_max,
-            low_1pct: low1_clean(low1, clean),
-            low_01pct: low1_clean(low01, clean),
+            frametime: Some(((1000.0 / fps) * 100.0).round() / 100.0),
         });
     }
 
-    RtssData {
-        running: true,
-        apps,
-        error: None,
-    }
+    // 帧率降序，主应用取第一个
+    apps.sort_by(|a, b| b.fps.partial_cmp(&a.fps).unwrap_or(std::cmp::Ordering::Equal));
+    out.apps = apps;
+
+    out
 }
 
-fn low1_clean(v: f32, f: impl Fn(f32) -> Option<f32>) -> Option<f32> {
-    f(v)
+/// 用 Afterburner(MAHM) 的数据补全主帧率与应用名。
+///
+/// Afterburner 自己判断「当前哪个是游戏」，所以以它的 Framerate 为锚点，
+/// 在 RTSS 的应用表里找帧率最接近的那个进程作为应用名。
+pub fn finalize(rt: &mut RtssData, mahm: &MahmData) {
+    let mget = |sid: u32| -> Option<f32> {
+        mahm.items
+            .iter()
+            .find(|i| i.id == sid)
+            .map(|i| i.value)
+            .filter(|v| v.is_finite() && *v > 0.0)
+    };
+
+    let ab_fps = mget(SRC_FRAMERATE);
+
+    // 主应用
+    let best = match ab_fps {
+        Some(a) => rt
+            .apps
+            .iter()
+            .filter(|c| c.fps >= 5.0)
+            .min_by(|x, y| {
+                (x.fps - a)
+                    .abs()
+                    .partial_cmp(&(y.fps - a).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }),
+        // 没有 Afterburner 锚点时，退化为帧率最高的应用（过滤低频重绘进程）
+        None => rt.apps.iter().find(|c| c.fps >= 20.0),
+    };
+
+    rt.app = best.map(|a| short_name(&a.app));
+    rt.fps = ab_fps.or_else(|| best.map(|a| a.fps));
+
+    rt.frametime = rt
+        .fps
+        .filter(|f| *f > 0.0)
+        .map(|f| ((1000.0 / f) * 100.0).round() / 100.0);
+
+    rt.fps_avg = mget(SRC_FPS_AVG);
+    rt.fps_1pct_low = mget(SRC_FPS_1LOW);
+    rt.fps_01pct_low = mget(SRC_FPS_01LOW);
 }
 
-/// RTSS 是否在运行
-pub fn alive() -> bool {
-    read().running
+/// 取路径里的文件名
+fn short_name(p: &str) -> String {
+    p.rsplit(['\\', '/']).next().unwrap_or(p).to_string()
 }
