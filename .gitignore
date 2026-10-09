@@ -1,0 +1,36 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+
+# ---------- PyInstaller 构建产物 ----------
+# 源码仓库不收录打包产物和中间文件
+build/
+dist/
+*.spec.bak
+build.log
+*.log
+
+# ---------- 发布目录（含 exe 二进制，体积大）----------
+发布/
+发布 - 副本/
+dist_exe/
+
+# ---------- 运行时生成 ----------
+config.json
+LHMViewer.log
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
