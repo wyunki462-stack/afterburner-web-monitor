@@ -1,4 +1,8 @@
-//! AfterburnerWebMonitor v2.0 — Rust 重写版
+// 使用 Windows 子系统，避免弹出控制台黑窗口（release 构建生效）
+// debug 构建保留控制台，方便看 println 调试输出
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+//! AfterburnerWebMonitor v2.3 — Rust 重写版
 //!
 //! 从 MSI Afterburner 的 OSD 配置项读取硬件监控数据，用网页展示，
 //! 手机连同一局域网即可查看。
@@ -17,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const APP_NAME: &str = "AfterburnerWebMonitor";
-const APP_VERSION: &str = "2.2.0";
+const APP_VERSION: &str = "2.3.0";
 const DEFAULT_PORT: u16 = 8777;
 const FPS_HISTORY_LEN: usize = 60;
 
