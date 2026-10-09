@@ -137,9 +137,19 @@ fn new_nid(hwnd: HWND) -> NOTIFYICONDATAW {
     nid.uID = TRAY_ID;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAY;
-    // 用系统默认应用图标，避免依赖外部 ico 文件
-    // IDI_APPLICATION = MAKEINTRESOURCE(32512)
-    nid.hIcon = unsafe { LoadIconW(std::ptr::null_mut(), 32512usize as *const u16) };
+    // 优先用嵌进 exe 的自定义图标（资源 ID = 1，见 assets/app.rc）；
+    // 拿不到时回退到系统默认应用图标 IDI_APPLICATION = MAKEINTRESOURCE(32512)
+    nid.hIcon = unsafe {
+        let hinst = GetModuleHandleW(std::ptr::null());
+        let custom = LoadIconW(hinst, 1usize as *const u16);
+        if custom.is_null() {
+            util::log("托盘图标：未取到内嵌图标，回退到系统默认图标");
+            LoadIconW(std::ptr::null_mut(), 32512usize as *const u16)
+        } else {
+            util::log("托盘图标：已使用内嵌的自定义图标");
+            custom
+        }
+    };
     let tip = "AfterburnerWebMonitor - 硬件监控网页";
     let tip_utf16: Vec<u16> = tip.encode_utf16().take(127).collect();
     nid.szTip[..tip_utf16.len()].copy_from_slice(&tip_utf16);
