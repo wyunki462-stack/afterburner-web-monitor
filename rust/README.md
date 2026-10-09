@@ -2,7 +2,7 @@
 
 把 **MSI Afterburner** 的硬件监控数据变成手机可看的网页 —— 手机连同一 WiFi，浏览器打开就能实时看 CPU/GPU 温度、占用率、帧数等。
 
-> v2.0 使用 **Rust** 重写。相比 v1.0（Python），内存占用从 ~50 MB 降到 **~5 MB**，体积从 15 MB 降到 **~1 MB**。
+> 当前版本 **v2.4.1**。v2.0 起用 **Rust** 重写，相比 v1.0（Python）内存占用从 ~50 MB 降到 **~12 MB**，体积从 19 MB 降到 **460 KB**，且无任何运行时依赖。
 
 ## 特性
 
@@ -15,7 +15,7 @@
 
 ## 快速开始
 
-1. 从 [Releases](../../releases) 下载 `AfterburnerWebMonitor_2.0.0_x64-portable.zip`
+1. 从 [Releases](../../releases) 下载 `AfterburnerWebMonitor-v2.4.1-x64-portable.zip`
 2. 解压，双击 `AfterburnerWebMonitor.exe`
 3. 弹出提示框会显示手机访问地址，例如 `http://192.168.4.9:8777`
 4. 手机连同一 WiFi，浏览器打开该地址
@@ -38,6 +38,15 @@ RTSS             ──(命名共享内存 RTSSSharedMemoryV2)─┘
   其中 `MAHM_SHARED_MEMORY_ENTRY_FLAG_SHOW_IN_OSD`(bit0) 表示该项已在 OSD 显示。
   本程序只读取**已勾选 OSD** 的项 —— 所以改 Afterburner 的勾选，网页自动跟随。
 - **RTSSSharedMemoryV2**：RTSS 暴露的帧率数据。签名 `0xDEAD` 表示 RTSS 未运行。
+
+  两个容易踩的坑（v2.4.1 已修）：
+  - 头部的 `dwAppArrSize` **存的是条目数量（MAX_APPS = 256），不是字节数**
+    —— 有些 SDK 注释写成"数组大小"很容易误导，按字节去除会得到 0 个槽位，帧率就永远读不出来
+  - 时间字段 `dwTime0/dwTime1` 单位是**毫秒**，`fps = frames * 1000 / (time1 - time0)`
+
+  另外，RTSS 的应用表里会同时列出浏览器、办公软件等被 hook 的进程，
+  它们的帧率有时比游戏还高。所以**不能简单取帧率最高的那个当游戏**——
+  本程序以 Afterburner 报告的帧率为锚点，取应用表里最接近的进程。
 
 ## 从源码构建
 
