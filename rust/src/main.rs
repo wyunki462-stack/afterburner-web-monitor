@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const APP_NAME: &str = "AfterburnerWebMonitor";
-const APP_VERSION: &str = "2.4.0";
+const APP_VERSION: &str = "2.4.1";
 const DEFAULT_PORT: u16 = 8777;
 const FPS_HISTORY_LEN: usize = 60;
 
@@ -112,7 +112,9 @@ fn main() {
 fn collector_loop(state: Arc<Mutex<AppState>>) {
     loop {
         let mahm = mahm::read();
-        let rtss = rtss::read();
+        let mut rtss = rtss::read();
+        // 用 Afterburner 的 Framerate 作为锚点，确定「哪个进程是游戏」
+        rtss::finalize(&mut rtss, &mahm);
 
         let now = util::now();
         {
