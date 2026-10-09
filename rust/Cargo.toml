@@ -1,6 +1,6 @@
 [package]
 name = "afterburner-web-monitor"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "把 MSI Afterburner 的硬件监控数据变成手机可看的网页"
 authors = ["wyunki"]
