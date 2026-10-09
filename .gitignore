@@ -24,7 +24,7 @@ dist_exe/
 
 # ---------- 运行时生成 ----------
 config.json
-LHMViewer.log
+AfterburnerWebMonitor.log
 
 # ---------- 编辑器 / 系统 ----------
 .vscode/
