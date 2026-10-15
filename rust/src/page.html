@@ -12,8 +12,16 @@ body{background:#0f1117;color:#e8eaf0;font-family:-apple-system,"PingFang SC","M
      padding:14px;min-height:100vh}
 body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height:100vw;
      position:absolute;top:0;left:100vw;overflow-y:auto}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px;flex-wrap:wrap}
 .header h1{font-size:17px;font-weight:600;letter-spacing:.5px}
+.hleft{display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap}
+.srcsel{display:none;background:#1a1d27;border:1px solid #232733;border-radius:9px;
+      padding:2px;gap:2px;flex:none}
+.srcsel button{background:none;border:none;color:#7a8296;font-size:11px;padding:4px 8px;
+      border-radius:7px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.srcsel button.on{background:#5a3fd6;color:#fff}
+.srcsel button:active{opacity:.8}
+.srcsel button.dis{opacity:.3;cursor:not-allowed}
 .status{font-size:11px;color:#5b6272;display:flex;align-items:center;gap:5px}
 .dot{width:7px;height:7px;border-radius:50%;background:#2ecc71;animation:pulse 1.4s infinite}
 .dot.off{background:#e74c3c;animation:none}
@@ -95,11 +103,38 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .hint{font-size:11px;color:#5b6272;line-height:1.6;margin-top:10px;
       padding:10px 12px;background:#141822;border-radius:9px;border:1px solid #1f2432}
+
+/* 自选监控项 */
+.picksearch{width:100%;background:#11151e;border:1px solid #262c3a;color:#e8eaf0;
+      font-size:12px;padding:9px 11px;border-radius:9px;margin-bottom:9px;font-family:inherit}
+.picksearch::placeholder{color:#4a5164}
+.pickbar{display:flex;gap:7px;align-items:center;margin-bottom:9px;flex-wrap:wrap}
+.pickbar .cnt{margin-left:auto;font-size:11px;color:#7a8296;white-space:nowrap}
+.picklist{max-height:44vh;overflow-y:auto;background:#11151e;border:1px solid #1f2432;
+      border-radius:10px;padding:4px 9px 9px}
+.pk-g{font-size:11px;color:#6b7385;font-weight:600;letter-spacing:1.2px;
+      margin:10px 0 4px;position:sticky;top:-4px;background:#11151e;padding:3px 0;z-index:1}
+.pk-i{display:flex;align-items:center;gap:8px;padding:6px 2px;
+      border-bottom:1px solid #191e2a;font-size:12px;cursor:pointer}
+.pk-i:last-child{border-bottom:none}
+.pk-i input{width:15px;height:15px;accent-color:#5a3fd6;flex:none;cursor:pointer}
+.pk-i .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk-i .vv{color:#7a8296;font-size:11px;font-variant-numeric:tabular-nums;flex:none}
+.pk-empty{font-size:11px;color:#4a5164;text-align:center;padding:22px 0}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>硬件监控</h1>
+  <div class="hleft">
+    <h1>硬件监控</h1>
+    <div class="srcsel" id="srcSel">
+      <button data-src="ab" onclick="pickSrc('ab')">小飞机</button>
+      <button data-src="hwfull" onclick="pickSrc('hwfull')">HWiNFO 全显示</button>
+      <button data-src="hwcustom" onclick="pickSrc('hwcustom')">HWiNFO 自选</button>
+    </div>
+    <button class="rotbtn" id="pickBtn" style="display:none;padding:5px 9px;font-size:11px"
+            onclick="openPick()">选项目</button>
+  </div>
   <div style="display:flex;gap:8px;align-items:center">
     <button class="rotbtn" onclick="openSet()">设置</button>
     <button class="rotbtn" onclick="toggleRotate()">转屏</button>
@@ -109,17 +144,14 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
 
 <div id="warnWrap"></div>
 <div id="fpsWrap"></div>
-<div id="gpuWrap"></div>
-<div id="cpuWrap"></div>
-<div id="ramWrap"></div>
-<div id="otherWrap"></div>
+<div id="sensorWrap"></div>
 
 <div class="footer" id="foot">—</div>
 
 <div class="mask" id="mask" onclick="if(event.target===this)closeSet()">
   <div class="panel">
     <h2>设置</h2>
-    <div class="sub">数据来自 MSI Afterburner —— 在它的 OSD 上勾选什么，这里就显示什么</div>
+    <div class="sub">传感器数据支持 MSI Afterburner 与 HWiNFO 两个来源，游戏帧率来自 RTSS</div>
 
     <div class="set-item">
       <div>
@@ -163,10 +195,56 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
       <button class="rotbtn" onclick="startProg('rtss')">启动</button>
     </div>
 
+    <div class="set-item">
+      <div>
+        <div class="t">启动 HWiNFO</div>
+        <div class="d" id="hwState">检测中…</div>
+        <div class="d">传感器数据的来源之一</div>
+      </div>
+      <button class="rotbtn" onclick="startProg('hwinfo')">启动</button>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">HWiNFO 共享内存导出</div>
+        <div class="d">HWiNFO 必须开启这一项，本页才能读到它的数据</div>
+        <div class="d" id="smState">检测中…</div>
+      </div>
+      <button class="rotbtn" id="smBtn" onclick="fixSm()">一键开启</button>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">HWiNFO 自选监控项</div>
+        <div class="d" id="pickState">—</div>
+        <div class="d">「HWiNFO 自选」模式下显示的内容</div>
+      </div>
+      <button class="rotbtn" onclick="openPick()">选择</button>
+    </div>
+
     <div class="hint" id="osdHint">—</div>
 
     <div class="closebar">
       <button class="btn pri" onclick="closeSet()">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="pickMask" style="z-index:60" onclick="if(event.target===this)closePick()">
+  <div class="panel">
+    <h2>选择 HWiNFO 监控项</h2>
+    <div class="sub" id="pickSub">—</div>
+    <input class="picksearch" id="pickSearch" placeholder="搜索名称…" oninput="renderPickList()">
+    <div class="pickbar">
+      <button class="rotbtn" onclick="pickBulk(true)">全选</button>
+      <button class="rotbtn" onclick="pickBulk(false)">全不选</button>
+      <button class="rotbtn" onclick="pickSmart()">智能默认</button>
+      <span class="cnt" id="pickCount">已选 0</span>
+    </div>
+    <div class="picklist" id="pickList">加载中…</div>
+    <div class="closebar">
+      <button class="btn" onclick="closePick()">取消</button>
+      <button class="btn pri" onclick="savePick()">保存</button>
     </div>
   </div>
 </div>
@@ -245,20 +323,17 @@ function renderFps(r){
   </div>`;
 }
 
-/* ---------- 通用卡片（数据来自 Afterburner OSD 项） ---------- */
+/* ---------- 通用卡片（数据来自当前数据源） ---------- */
 function card(it){
   const val = it.value;
   const unit = it.unit || '';
   let cls = '';
-  // 温度类着色
-  if ((it.id===0x00 || it.id===0x80) && val!=null) cls = tempCls(val);
+  // 温度类着色（按单位判断，两个数据源通用）
+  if (val != null && (unit === '°C' || unit === 'C' || unit === '℃')) cls = tempCls(val);
   // 百分比类显示进度条
   let b = '';
-  if (unit === '%' && val != null) {
-    const pct = (it.id===0x60) ? val : val;   // 相对功耗也是 %
-    b = bar(pct);
-  }
-  const showUnit = unit && unit !== '';
+  if (unit === '%' && val != null) b = bar(val);
+  const showUnit = unit !== '';
   return `<div class="card">
     <div class="label">${esc(it.label)}</div>
     <div class="value ${cls}">${num(val, val!=null && Math.abs(val)<1000 && val%1!==0 ? 1 : 0)}${showUnit?`<span class="unit">${esc(unit)}</span>`:''}</div>
@@ -266,60 +341,112 @@ function card(it){
   </div>`;
 }
 
-function renderGroup(items, title, cols){
+function renderGroup(items, title){
   if (!items.length) return '';
-  const cls = cols===3 ? 'grid3' : 'grid';
-  return `<div class="section-tag">${title}</div><div class="${cls}">`
+  return `<div class="section-tag">${title}</div><div class="grid">`
        + items.map(card).join('') + `</div>`;
 }
 
+/* 分组顺序与标题 */
+const GROUP_ORDER = ['gpu','cpu','ram','storage','board','fps','other'];
+const GROUP_TITLE = {gpu:'GPU', cpu:'CPU', ram:'内存', storage:'硬盘',
+                     board:'主板', fps:'帧率', other:'其他'};
+const SRC_NAME = {ab:'MSI Afterburner', hwfull:'HWiNFO 全显示', hwcustom:'HWiNFO 自选'};
+let LAST = {};
+
 function render(d){
-  const ab = d.ab || {};
-  const items = ab.items || [];
-  const abOk = !!ab.ok;
+  LAST = d || {};
+  const source = d.source || 'ab';
+  const active = d.active || source;
+  const isHw = active !== 'ab';
+  const src = d.sensors || {};
+  const items = src.items || [];
+  const srcOk = !!src.ok;
   const rt = d.rtss || {};
+
+  /* ---- 数据源选择框：至少一个源可用时才出现 ---- */
+  const avail = {ab: !!d.ab_ok, hwfull: !!d.hwinfo_ok, hwcustom: !!d.hwinfo_ok};
+  const anyOk = avail.ab || avail.hwfull;
+  const selEl = document.getElementById('srcSel');
+  selEl.style.display = anyOk ? 'flex' : 'none';
+  const btns = selEl.getElementsByTagName('button');
+  for (let i = 0; i < btns.length; i++) {
+    const s = btns[i].getAttribute('data-src');
+    let cls = (s === source) ? 'on' : '';
+    if (!avail[s]) cls += ' dis';
+    btns[i].className = cls;
+  }
+  /* 「选项目」只在自选模式下出现 */
+  document.getElementById('pickBtn').style.display = (source === 'hwcustom') ? '' : 'none';
 
   /* ---- 警告条 ---- */
   let warn = '';
-  if (!abOk) {
-    warn = `<div class="warn">⚠ <b>Afterburner 未运行</b> —— 没有传感器数据。<br>
-      请在 <b>设置</b> 里启动它，或手动打开 MSI Afterburner。</div>`;
+  if (!srcOk) {
+    warn = isHw
+      ? `<div class="warn">⚠ <b>HWiNFO 未就绪</b> —— 没有传感器数据。<br>
+         打开 HWiNFO → <b>设置</b> → 勾选 <b>Shared Memory Support</b> → 重启 HWiNFO 生效。</div>`
+      : `<div class="warn">⚠ <b>Afterburner 未运行</b> —— 没有传感器数据。<br>
+         请在 <b>设置</b> 里启动它，或手动打开 MSI Afterburner。</div>`;
+  }
+  if (active !== source) {
+    warn += `<div class="warn">⚠ 所选「<b>${SRC_NAME[source] || source}</b>」当前不可用，
+             已自动切换到 <b>${SRC_NAME[active] || active}</b>。</div>`;
   }
   document.getElementById('warnWrap').innerHTML = warn;
 
-  /* ---- 帧数卡片 ---- */
+  /* ---- 帧率卡片（帧率始终来自 RTSS，与数据源无关） ---- */
   document.getElementById('fpsWrap').innerHTML = renderFps(rt);
 
-  /* ---- 按分组渲染 OSD 项 ---- */
-  const byGroup = {gpu:[], cpu:[], ram:[], fps:[], other:[]};
-  items.forEach(it => (byGroup[it.group] || byGroup.other).push(it));
-
-  /* 帧率相关的项不重复显示（已在帧数卡片里），除非 RTSS 没运行 */
+  /* ---- 按分组渲染 ---- */
+  const byGroup = {};
+  items.forEach(it => {
+    const g = it.group || 'other';
+    (byGroup[g] = byGroup[g] || []).push(it);
+  });
+  /* 帧率相关的项不重复显示（已在帧数卡片里），除非 RTSS 没出数据 */
   if (rt.fps != null) byGroup.fps = [];
 
-  document.getElementById('gpuWrap').innerHTML  = renderGroup(byGroup.gpu, 'GPU');
-  document.getElementById('cpuWrap').innerHTML  = renderGroup(byGroup.cpu, 'CPU');
-  document.getElementById('ramWrap').innerHTML  = renderGroup(byGroup.ram, '内存');
-  document.getElementById('otherWrap').innerHTML= renderGroup(byGroup.other, '其他');
+  const order = GROUP_ORDER.slice();
+  Object.keys(byGroup).forEach(g => {
+    if (order.indexOf(g) < 0 && byGroup[g] && byGroup[g].length) order.push(g);
+  });
 
-  /* ---- 没有 OSD 项时给个提示 ---- */
-  if (abOk && items.length === 0) {
-    document.getElementById('gpuWrap').innerHTML =
-      `<div class="warn">Afterburner 在运行，但没有勾选任何 OSD 监控项。<br>
-       请打开 Afterburner 的 <b>设置 → 监控</b>，<br>
-       对想看的项目逐个点 <b>「在 OSD 上显示」</b>。</div>`;
+  let html = '';
+  order.forEach(g => {
+    const arr = byGroup[g];
+    if (arr && arr.length) html += renderGroup(arr, GROUP_TITLE[g] || g);
+  });
+  document.getElementById('sensorWrap').innerHTML = html;
+
+  /* ---- 有源但没数据时给提示 ---- */
+  if (srcOk && items.length === 0) {
+    if (!isHw) {
+      document.getElementById('sensorWrap').innerHTML =
+        `<div class="warn">Afterburner 在运行，但没有勾选任何 OSD 监控项。<br>
+         请打开 Afterburner 的 <b>设置 → 监控</b>，<br>
+         对想看的项目逐个点 <b>「在 OSD 上显示」</b>。</div>`;
+    } else if (active === 'hwcustom') {
+      document.getElementById('sensorWrap').innerHTML =
+        `<div class="warn">当前没有勾选任何 HWiNFO 监控项。<br>
+         点左上角 <b>「选项目」</b>，或在 <b>设置 → HWiNFO 自选监控项</b> 里挑选要显示的项。</div>`;
+    } else {
+      document.getElementById('sensorWrap').innerHTML =
+        `<div class="warn">HWiNFO 共享内存已连接，但读不到任何读数。<br>
+         请确认 HWiNFO 已读到传感器（可能需要以管理员身份运行）。</div>`;
+    }
   }
 
   /* ---- 状态灯 ---- */
-  let ok = abOk, txt = abOk ? '实时' : '无数据';
+  let ok = srcOk, txt = srcOk ? '实时' : '无数据';
   if (rt.fps != null) { ok = true; txt = '实时 · '+num(rt.fps)+'fps'; }
   document.getElementById('dot').className = ok ? 'dot' : 'dot off';
   document.getElementById('stat').textContent = txt;
 
   const t = d.ts ? new Date(d.ts*1000) : null;
-  const cnt = items.length ? ` · OSD ${items.length} 项` : '';
   document.getElementById('foot').textContent =
-    (t ? '更新 ' + t.toLocaleTimeString('zh-CN') : '—') + cnt;
+    (t ? '更新 ' + t.toLocaleTimeString('zh-CN') : '—')
+    + ' · ' + (SRC_NAME[active] || active)
+    + (items.length ? ' · ' + items.length + ' 项' : '');
 }
 
 async function tick(){
@@ -337,6 +464,141 @@ async function tick(){
   }
 }
 function toggleRotate(){ document.body.classList.toggle('rotate'); }
+
+/* ---------- 数据源切换（小飞机 / HWiNFO 全显示 / HWiNFO 自选） ---------- */
+async function pickSrc(s){
+  if (s === 'ab' && !LAST.ab_ok) { toast('小飞机未运行'); return; }
+  if (s !== 'ab' && !LAST.hwinfo_ok) { toast('HWiNFO 未就绪'); return; }
+  if (s === LAST.source) return;
+  try{
+    const r = await fetch('/api/source',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({source: s})
+    });
+    const d = await r.json();
+    toast(d.ok ? ('已切换到 ' + (SRC_NAME[s] || s)) : '切换失败');
+    tick();
+  }catch(e){ toast('切换失败'); }
+}
+
+/* ---------- HWiNFO 自选项目 ---------- */
+const PICK = { loaded:false, items:[], vis:[], sel:new Set(), reset:false, all:0 };
+
+async function openPick(){
+  document.getElementById('pickMask').classList.add('on');
+  if (!PICK.loaded) await loadPick();
+  renderPickList();
+}
+function closePick(){ document.getElementById('pickMask').classList.remove('on'); }
+
+async function loadPick(){
+  const box = document.getElementById('pickList');
+  try{
+    const r = await fetch('/api/hwinfo/list',{cache:'no-store'});
+    const d = await r.json();
+    if (!d.ok){
+      box.innerHTML = `<div class="pk-empty">HWiNFO 共享内存不可用<br>请先在「设置」里开启它</div>`;
+      document.getElementById('pickSub').textContent = d.msg || '读取失败';
+      return;
+    }
+    PICK.items = d.items || [];
+    PICK.all = d.all_count || PICK.items.length;
+    if (d.selected == null){
+      // 还没自定义过 → 默认勾上「智能筛选」的项，并标记为「跟随默认」
+      PICK.sel = new Set(PICK.items.filter(i => i.auto).map(i => i.key));
+      PICK.reset = true;
+    } else {
+      PICK.sel = new Set(d.selected);
+      PICK.reset = false;
+    }
+    PICK.loaded = true;
+    document.getElementById('pickSub').innerHTML =
+      `HWiNFO 上报 <b>${PICK.all}</b> 条读数，其中标签可用的有 <b>${PICK.items.length}</b> 条。`;
+  }catch(e){
+    box.innerHTML = '<div class="pk-empty">读取失败</div>';
+  }
+}
+
+function renderPickList(){
+  const box = document.getElementById('pickList');
+  const q = (document.getElementById('pickSearch').value || '').trim().toLowerCase();
+  const arr = q
+    ? PICK.items.filter(i => (i.label||'').toLowerCase().indexOf(q) >= 0
+                          || (i.source||'').toLowerCase().indexOf(q) >= 0)
+    : PICK.items;
+  PICK.vis = [];
+  if (!arr.length){
+    box.innerHTML = '<div class="pk-empty">没有匹配项</div>';
+    updatePickCount();
+    return;
+  }
+  const groups = {};
+  arr.forEach(i => { (groups[i.group] = groups[i.group] || []).push(i); });
+  const order = GROUP_ORDER.filter(g => groups[g]);
+  Object.keys(groups).forEach(g => { if (order.indexOf(g) < 0) order.push(g); });
+
+  let h = '';
+  order.forEach(g => {
+    h += `<div class="pk-g">${esc(GROUP_TITLE[g] || g)} · ${groups[g].length}</div>`;
+    groups[g].forEach(it => {
+      const idx = PICK.vis.push(it.key) - 1;
+      const dec = it.value != null && Math.abs(it.value) < 1000 && it.value % 1 !== 0;
+      const v = it.value == null ? '' : num(it.value, dec ? 1 : 0);
+      h += `<label class="pk-i"><input type="checkbox" data-i="${idx}"`
+         + (PICK.sel.has(it.key) ? ' checked' : '')
+         + ` onchange="togglePick(this)">`
+         + `<span class="lb">${esc(it.label)}</span>`
+         + `<span class="vv">${esc(v)}${esc(it.unit || '')}</span></label>`;
+    });
+  });
+  box.innerHTML = h;
+  updatePickCount();
+}
+
+function togglePick(el){
+  const k = PICK.vis[+el.getAttribute('data-i')];
+  if (k == null) return;
+  if (el.checked) PICK.sel.add(k); else PICK.sel.delete(k);
+  PICK.reset = false;   // 手动改过，保存时就固化成显式列表
+  updatePickCount();
+}
+
+function updatePickCount(){
+  const el = document.getElementById('pickCount');
+  if (el) el.textContent = '已选 ' + PICK.sel.size + (PICK.reset ? '（智能默认）' : '');
+}
+
+function pickBulk(on){
+  if (on) PICK.items.forEach(i => PICK.sel.add(i.key));
+  else PICK.sel.clear();
+  PICK.reset = false;
+  renderPickList();
+}
+
+function pickSmart(){
+  PICK.sel = new Set(PICK.items.filter(i => i.auto).map(i => i.key));
+  PICK.reset = true;
+  renderPickList();
+  toast('已恢复智能默认');
+}
+
+async function savePick(){
+  const body = PICK.reset ? {reset:true} : {keys: Array.from(PICK.sel)};
+  try{
+    const r = await fetch('/api/hwinfo/selected',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok) { toast('保存失败'); return; }
+    toast(PICK.reset ? '已恢复智能默认' : ('已保存 · ' + d.count + ' 项'));
+    closePick();
+    await tick();
+    // 保存后如果不在自选模式，自动切过去看效果
+    if (LAST.hwinfo_ok && LAST.source !== 'hwcustom') await pickSrc('hwcustom');
+    if (document.getElementById('mask').classList.contains('on')) refreshStates();
+  }catch(e){ toast('保存失败'); }
+}
 
 /* ---------- 设置面板 ---------- */
 let settingsLoaded = false;
@@ -369,18 +631,55 @@ async function refreshStates(){
   try{
     const r = await fetch('/api/data',{cache:'no-store'});
     const d = await r.json();
-    const ab = d.ab || {}, rt = d.rtss || {};
+    LAST = d || LAST;
+    const ab = d.ab || {}, rt = d.rtss || {}, hws = d.hw_stats || {};
     document.getElementById('abState').textContent =
       ab.ok ? `运行中 · 共 ${ab.all_count||0} 项，OSD ${ab.osd_count||0} 项`
             : '未运行 —— 没有任何数据';
     document.getElementById('rtssState').textContent =
       rt.running ? (rt.fps!=null ? `运行中 · ${num(rt.fps)} fps` : '运行中 · 等待游戏')
                  : '未运行 —— 没有帧数数据';
-    document.getElementById('osdHint').innerHTML = ab.ok
-      ? `当前 OSD 显示 <b style="color:#9aa3b8">${ab.osd_count||0}</b> 项，共配置 ${ab.all_count||0} 项。<br>
-         想改显示内容？打开 Afterburner → 设置 → 监控，勾选需要项。<br>
-         网页会自动跟随，<b style="color:#9aa3b8">不用改任何代码</b>。`
-      : `Afterburner 未运行。启动后这里会显示它配置的监控项数量。`;
+    document.getElementById('hwState').textContent =
+      d.hwinfo_ok ? `运行中 · 共享内存 ${hws.all||0} 项`
+                  : (hws.error || '未运行或未开启共享内存');
+
+    /* 自选项状态 */
+    const ps = document.getElementById('pickState');
+    if (ps){
+      if (!d.hwinfo_ok) ps.textContent = 'HWiNFO 未运行，暂时无法选择';
+      else if (hws.explicit) ps.textContent = `已自定义 · 选中 ${hws.custom||0} 项（共 ${hws.full||0} 项）`;
+      else ps.textContent = `跟随智能默认 · ${hws.auto||0} 项（全显示为 ${hws.full||0} 项）`;
+    }
+
+    const anyOk = !!(d.ab_ok || d.hwinfo_ok);
+    document.getElementById('osdHint').innerHTML =
+      `<b style="color:#9aa3b8">当前数据源</b>：${SRC_NAME[d.active] || d.active}`
+      + (anyOk ? '（可在页面左上角切换）' : '') + '<br>'
+      + '· <b>小飞机</b>：显示 Afterburner「设置 → 监控」里勾了<b>在 OSD 上显示</b>的项目。<br>'
+      + '· <b>HWiNFO 全显示</b>：把共享内存里所有读数都铺出来（含逐核电压等，项数很多）。<br>'
+      + '· <b>HWiNFO 自选</b>：只显示你在<b>选择监控项</b>里勾选的内容；<br>'
+      + '&nbsp;&nbsp;点「选择」→「智能默认」可一键恢复推荐集（温度/功耗/占用/频率等）。<br>'
+      + '&nbsp;&nbsp;HWiNFO 免费版共享内存连续跑约 12 小时会失效，程序会自动重启它恢复。';
+
+    /* 共享内存开关状态 */
+    try{
+      const sr = await fetch('/api/settings',{cache:'no-store'});
+      const sd = await sr.json();
+      const hwc = sd.hwinfo || {};
+      const el = document.getElementById('smState');
+      if (el){
+        if (!hwc.exists){
+          el.textContent = '没找到 HWiNFO64.exe';
+          el.style.color = '#7a8296';
+        } else if (hwc.sm_enabled){
+          el.textContent = hwc.running ? '已开启 · HWiNFO 正在运行' : '已开启';
+          el.style.color = '#2ecc71';
+        } else {
+          el.textContent = '未开启 —— 点右侧按钮自动配置';
+          el.style.color = '#e8a33d';
+        }
+      }
+    }catch(e){}
   }catch(e){}
 }
 
@@ -401,7 +700,8 @@ async function saveSet(){
 }
 
 async function startProg(what){
-  const el = document.getElementById(what==='ab' ? 'abState' : 'rtssState');
+  const IDS = {ab:'abState', rtss:'rtssState', hwinfo:'hwState'};
+  const el = document.getElementById(IDS[what] || 'abState');
   el.textContent = '正在启动…';
   try{
     const r = await fetch('/api/start/'+what,{method:'POST'});
@@ -409,6 +709,31 @@ async function startProg(what){
     toast(d.msg || '已请求启动');
     setTimeout(refreshStates, 3000);
   }catch(e){ toast('启动失败'); }
+}
+
+/* 一键开启 HWiNFO 共享内存（会重启 HWiNFO，需等待几秒） */
+async function fixSm(){
+  const btn = document.getElementById('smBtn');
+  const st  = document.getElementById('smState');
+  btn.disabled = true;
+  btn.textContent = '处理中';
+  st.textContent = '正在写入配置并重启 HWiNFO…';
+  st.style.color = '#7a8296';
+  try{
+    const r = await fetch('/api/hwinfo/setup',{method:'POST'});
+    const d = await r.json();
+    st.textContent = d.msg || (d.ok ? '已开启' : '操作失败');
+    st.style.color = d.ok ? '#2ecc71' : '#e8a33d';
+    toast(d.msg || '已处理');
+    setTimeout(refreshStates, 1200);
+  }catch(e){
+    st.textContent = '操作失败';
+    st.style.color = '#e8a33d';
+    toast('操作失败');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '一键开启';
+  }
 }
 
 tick();

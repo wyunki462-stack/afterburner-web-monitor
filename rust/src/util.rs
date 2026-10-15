@@ -147,12 +147,37 @@ impl Mapping {
         unsafe { std::ptr::read_unaligned(self.view.add(off) as *const f32) }
     }
 
+    /// 读 f64（小端）
+    #[inline]
+    pub fn f64_at(&self, off: usize) -> f64 {
+        unsafe { std::ptr::read_unaligned(self.view.add(off) as *const f64) }
+    }
+
     /// 读固定长度 C 字符串（按 GBK/本地编码解码）
     pub fn cstr_at(&self, off: usize, max: usize) -> String {
         unsafe {
             let slice = std::slice::from_raw_parts(self.view.add(off), max);
             let end = slice.iter().position(|&b| b == 0).unwrap_or(max);
             decode_ansi(&slice[..end])
+        }
+    }
+
+    /// 读固定长度 C 字符串，自动判断 UTF-8 / ANSI
+    ///
+    /// HWiNFO 的字符串是 `char[]`，英文系统是 ASCII，但中文传感器名
+    /// 可能是 UTF-8，也可能是本地代码页，这里先试 UTF-8 再回退 ANSI。
+    pub fn cstr_at_smart(&self, off: usize, max: usize) -> String {
+        unsafe {
+            let slice = std::slice::from_raw_parts(self.view.add(off), max);
+            let end = slice.iter().position(|&b| b == 0).unwrap_or(max);
+            let bytes = &slice[..end];
+            if bytes.iter().all(|&b| b < 0x80) {
+                return String::from_utf8_lossy(bytes).to_string();
+            }
+            match std::str::from_utf8(bytes) {
+                Ok(s) => s.to_string(),
+                Err(_) => decode_ansi(bytes),
+            }
         }
     }
 }
