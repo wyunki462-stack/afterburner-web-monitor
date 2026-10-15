@@ -182,6 +182,8 @@ fn handle(mut stream: TcpStream, state: Arc<Mutex<AppState>>) -> std::io::Result
             let cfg = st.cfg.clone();
             drop(st);
             config::save(&cfg);
+            // 开机自启开关落到注册表（HKCU\...\Run）
+            crate::autostart::sync(&cfg);
             let obj = serde_json::json!({ "ok": true, "source": cfg.source });
             json(&mut stream, 200, &obj)?;
         }
@@ -305,6 +307,18 @@ fn settings_json(cfg: &config::Config, hw_auto: u32, hw_all: u32) -> serde_json:
     let ab = util::find_exe_if_empty(&cfg.ab_path, &config::AB_CANDIDATES);
     let rtss = util::find_exe_if_empty(&cfg.rtss_path, &config::RTSS_CANDIDATES);
     let hw = util::find_exe_if_empty(&cfg.hwinfo_path, &config::HWINFO_CANDIDATES);
+
+    // 四条开机启动项的「实际」状态（读注册表，不写）
+    let auto = crate::autostart::items(cfg);
+    let mut in_run = serde_json::Map::new();
+    let mut paths_exist = serde_json::Map::new();
+    let mut auto_path = serde_json::Map::new();
+    for it in &auto {
+        in_run.insert(it.id.to_string(), serde_json::json!(it.in_run));
+        paths_exist.insert(it.id.to_string(), serde_json::json!(it.exists));
+        auto_path.insert(it.id.to_string(), serde_json::json!(it.exe));
+    }
+
     serde_json::json!({
         "config": {
             "port": cfg.port,
@@ -326,17 +340,16 @@ fn settings_json(cfg: &config::Config, hw_auto: u32, hw_all: u32) -> serde_json:
             "rtss": cfg.auto_start_rtss,
             "hwinfo": cfg.auto_start_hwinfo,
         },
+        // 配置里的意愿 vs 注册表里的实际，两者不一致时页面会提示
+        "autostart_in_run": serde_json::Value::Object(in_run),
+        "autostart_path": serde_json::Value::Object(auto_path),
         "hwinfo": {
             "path": hw,
             "exists": std::path::Path::new(&hw).exists(),
             "sm_enabled": crate::hwinfo::sm_enabled(&hw),
             "running": crate::hwinfo::is_running(),
         },
-        "paths_exist": {
-            "ab": std::path::Path::new(&ab).exists(),
-            "rtss": std::path::Path::new(&rtss).exists(),
-            "hwinfo": std::path::Path::new(&hw).exists(),
-        }
+        "paths_exist": serde_json::Value::Object(paths_exist),
     })
 }
 

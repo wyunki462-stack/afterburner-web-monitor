@@ -151,12 +151,14 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
 <div class="mask" id="mask" onclick="if(event.target===this)closeSet()">
   <div class="panel">
     <h2>设置</h2>
-    <div class="sub">传感器数据支持 MSI Afterburner 与 HWiNFO 两个来源，游戏帧率来自 RTSS</div>
+    <div class="sub">传感器数据支持 MSI Afterburner 与 HWiNFO 两个来源，游戏帧率来自 RTSS。<br>
+      开关会写入 Windows 启动项（<code>HKCU\...\Run</code>），关掉即移除。</div>
 
     <div class="set-item">
       <div>
         <div class="t">AfterburnerWebMonitor 开机自启</div>
         <div class="d">开机后自动启动本监控服务</div>
+        <div class="d" id="au_app">—</div>
       </div>
       <label class="sw"><input type="checkbox" id="sw_app" onchange="saveSet()"><i></i></label>
     </div>
@@ -166,6 +168,7 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
         <div class="t">MSI Afterburner 开机自启</div>
         <div class="d warn-t">不启动 Afterburner 就没有任何数据</div>
         <div class="d">传感器数据（温度 / 占用 / 频率）都来自它</div>
+        <div class="d" id="au_ab">—</div>
       </div>
       <label class="sw"><input type="checkbox" id="sw_ab" onchange="saveSet()"><i></i></label>
     </div>
@@ -175,8 +178,19 @@ body.rotate{transform:rotate(90deg);transform-origin:left top;width:100vh;height
         <div class="t">RTSS 开机自启</div>
         <div class="d warn-t">不启动 RTSS 就无法读取帧数</div>
         <div class="d">RTSS 负责统计游戏帧率（Afterburner 会带起它）</div>
+        <div class="d" id="au_rtss">—</div>
       </div>
       <label class="sw"><input type="checkbox" id="sw_rtss" onchange="saveSet()"><i></i></label>
+    </div>
+
+    <div class="set-item">
+      <div>
+        <div class="t">HWiNFO 开机自启</div>
+        <div class="d warn-t">不启动 HWiNFO 就看不到它的数据</div>
+        <div class="d">它需要管理员权限，开机时会弹一次 UAC（不点则不启动）</div>
+        <div class="d" id="au_hwinfo">—</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="sw_hwinfo" onchange="saveSet()"><i></i></label>
     </div>
 
     <div class="set-item">
@@ -619,12 +633,39 @@ async function loadSet(){
     document.getElementById('sw_app').checked  = !!a.app;
     document.getElementById('sw_ab').checked   = !!a.ab;
     document.getElementById('sw_rtss').checked = !!a.rtss;
+    const swHw = document.getElementById('sw_hwinfo');
+    if (swHw) swHw.checked = !!a.hwinfo;
+    /* 程序没找到的开关置灰（app 是自己，永远在） */
     const pe = d.paths_exist || {};
     document.getElementById('sw_ab').disabled   = !pe.ab;
     document.getElementById('sw_rtss').disabled = !pe.rtss;
+    if (swHw) swHw.disabled = !pe.hwinfo;
+    renderAuto(d);
     settingsLoaded = true;
     refreshStates();
   }catch(e){ toast('读取设置失败'); }
+}
+
+/* 显示四条开机启动项在注册表里的「实际」状态 */
+function renderAuto(d){
+  const want  = d.autostart || {};
+  const inRun = d.autostart_in_run || {};
+  const ex    = d.paths_exist || {};
+  const IDS = {app:'au_app', ab:'au_ab', rtss:'au_rtss', hwinfo:'au_hwinfo'};
+  for (const k in IDS){
+    const el = document.getElementById(IDS[k]);
+    if (!el) continue;
+    if (!ex[k]){
+      el.textContent = '未找到程序';
+      el.style.color = '#7a8296';
+    } else if (inRun[k]){
+      el.textContent = '✓ 已在开机启动项';
+      el.style.color = '#2ecc71';
+    } else {
+      el.textContent = want[k] ? '启动项未生效（关掉再打开试一次）' : '未加入开机启动项';
+      el.style.color = want[k] ? '#e8a33d' : '#7a8296';
+    }
+  }
 }
 
 async function refreshStates(){
@@ -685,10 +726,12 @@ async function refreshStates(){
 
 async function saveSet(){
   if(!settingsLoaded) return;
+  const hwSw = document.getElementById('sw_hwinfo');
   const body = { autostart: {
     app:  document.getElementById('sw_app').checked,
     ab:   document.getElementById('sw_ab').checked,
     rtss: document.getElementById('sw_rtss').checked,
+    hwinfo: hwSw ? hwSw.checked : false,
   }};
   try{
     await fetch('/api/settings',{
@@ -696,6 +739,7 @@ async function saveSet(){
       body: JSON.stringify(body)
     });
     toast('设置已保存');
+    await loadSet();          /* 回读注册表，刷新启动项实际状态 */
   }catch(e){ toast('保存失败'); }
 }
 

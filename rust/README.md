@@ -2,7 +2,7 @@
 
 把 **MSI Afterburner** / **HWiNFO64** 的硬件监控数据变成手机可看的网页 —— 手机连同一 WiFi，浏览器打开就能实时看 CPU/GPU 温度、占用率、帧数等。
 
-> 当前版本 **v2.6.0**。v2.0 起用 **Rust** 重写，相比 v1.0（Python）内存占用从 ~50 MB 降到 **~12 MB**，体积从 19 MB 降到 **500 KB 级**，且无任何运行时依赖。
+> 当前版本 **v2.6.1**。v2.0 起用 **Rust** 重写，相比 v1.0（Python）内存占用从 ~50 MB 降到 **~12 MB**，体积从 19 MB 降到 **500 KB 级**，且无任何运行时依赖。
 
 ## 特性
 
@@ -96,6 +96,35 @@ RTSS 暴露的帧率数据。签名 `0xDEAD` 表示 RTSS 未运行。
 本程序以 Afterburner 报告的帧率为锚点，取应用表里最接近的进程。
 
 > 注意：Afterburner 的帧率跟随"当前被统计的 3D 应用"，游戏切到后台会跳到别的进程（OSD 同行为，属预期）。
+
+## 开机自启（`src/autostart.rs`）
+
+设置面板里的四个自启开关，各自对应 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+下的**一条独立启动项**（`config.json` 存意愿，本模块负责落到注册表）：
+
+| 开关 | 注册表值名 |
+|---|---|
+| AfterburnerWebMonitor | `AfterburnerWebMonitor`（带 `--no-dialog`） |
+| MSI Afterburner | `AfterburnerWebMonitor_AB` |
+| RTSS | `AfterburnerWebMonitor_RTSS` |
+| HWiNFO | `AfterburnerWebMonitor_HWiNFO` |
+
+语义：
+
+- 勾选且程序存在 → 写入启动项（路径含空格时加引号）
+- 勾选但程序没找到 → **保持原样**，不清掉用户可能手动配好的项
+- 未勾选 → 删除启动项
+
+启动时与每次保存设置时都会同步一次（配置即真相）。
+
+> **历史坑**：这几个开关在 v2.6.0 及以前是**摆设** —— 只写 `config.json`，
+> 完全没有注册表代码。v1.0（Python 版，当时叫 LHMViewer）其实写过启动项，
+> 值名是 `LHMViewer_AB` / `LHMViewer_RTSS`，Rust 重写时这段实现被弄丢了。
+> v2.6.1 用新名字接管，并在启动时清掉旧的 `LHMViewer_*`，
+> 否则开机时 Afterburner / RTSS 会被拉起两次。
+
+> ⚠️ RTSS 与 HWiNFO64 的 manifest 要求管理员权限，从启动项拉起时 Windows 会弹 UAC。
+> 这是它们自身的设计，程序无法绕过 —— 想免掉弹窗需要用任务计划程序配置「最高权限运行」。
 
 ## 数据源三档切换
 
@@ -211,6 +240,7 @@ netsh advfirewall firewall add rule name="AfterburnerWebMonitor" dir=in action=a
 
 | 版本 | 变更 |
 |---|---|
+| **2.6.1** | 修复「开机自启」开关全是摆设 —— 补齐 `src/autostart.rs`，四个开关真正写入 `HKCU\...\Run`；新增 HWiNFO 开机自启开关；接管并清理旧版 `LHMViewer_*` 启动项 |
 | **2.6.0** | 数据源改为三档（小飞机 / HWiNFO 全显示 / HWiNFO 自选），新增自选弹窗（搜索、分组、智能默认） |
 | **2.5.0** | 新增 HWiNFO64 数据源；一键开启共享内存 + 提权启动；过滤从 425 项收敛到 75 项并自动分组 |
 | 2.4.1 | 修复帧率读不到（RTSS 应用表长度字段解析错误 + 前后端字段不匹配） |

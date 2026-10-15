@@ -17,12 +17,13 @@ mod web;
 mod config;
 mod util;
 mod tray;
+mod autostart;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const APP_NAME: &str = "AfterburnerWebMonitor";
-const APP_VERSION: &str = "2.6.0";
+const APP_VERSION: &str = "2.6.1";
 const DEFAULT_PORT: u16 = 8777;
 const FPS_HISTORY_LEN: usize = 60;
 
@@ -62,6 +63,30 @@ fn main() {
             let r = hwinfo::setup(&hw_path, false);
             util::log(&format!("自动配置完成：{}", r.msg));
         }
+    }
+
+    // 把开机自启开关同步到注册表（HKCU\...\Run）
+    {
+        let items = autostart::sync(&cfg);
+        let on: Vec<&str> = items
+            .iter()
+            .filter(|i| i.want && i.exists)
+            .map(|i| i.label)
+            .collect();
+        let missing: Vec<&str> = items
+            .iter()
+            .filter(|i| i.want && !i.exists)
+            .map(|i| i.label)
+            .collect();
+        util::log(&format!(
+            "开机自启：已开启 [{}]{}",
+            on.join(" / "),
+            if missing.is_empty() {
+                String::new()
+            } else {
+                format!("；未找到程序 [{}]", missing.join(" / "))
+            }
+        ));
     }
 
     let port = cfg.port;
